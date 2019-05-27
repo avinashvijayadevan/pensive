@@ -1,0 +1,9 @@
+C:\Users\avinash.vijayadevan\source\repos\NewtonSoft\NewtonSoft\bin\Debug\NewtonSoft.exe.config
+C:\Users\avinash.vijayadevan\source\repos\NewtonSoft\NewtonSoft\bin\Debug\NewtonSoft.exe
+C:\Users\avinash.vijayadevan\source\repos\NewtonSoft\NewtonSoft\bin\Debug\NewtonSoft.pdb
+C:\Users\avinash.vijayadevan\source\repos\NewtonSoft\NewtonSoft\bin\Debug\Newtonsoft.Json.dll
+C:\Users\avinash.vijayadevan\source\repos\NewtonSoft\NewtonSoft\bin\Debug\Newtonsoft.Json.xml
+C:\Users\avinash.vijayadevan\source\repos\NewtonSoft\NewtonSoft\obj\Debug\NewtonSoft.csproj.CoreCompileInputs.cache
+C:\Users\avinash.vijayadevan\source\repos\NewtonSoft\NewtonSoft\obj\Debug\NewtonSoft.csproj.CopyComplete
+C:\Users\avinash.vijayadevan\source\repos\NewtonSoft\NewtonSoft\obj\Debug\NewtonSoft.exe
+C:\Users\avinash.vijayadevan\source\repos\NewtonSoft\NewtonSoft\obj\Debug\NewtonSoft.pdb
