@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -31,12 +31,14 @@ namespace NewtonSoft
                       passenger = new PassengerInfo();
                       Random randomNumber = new Random();
                       var age = GetRandomDate(1945);
-                      var travelDate = GetRandomDate(2017).Item1;
+                      var travelDate = GetRandomDate(2017).Item1.Date;
                       passenger.Gender = randomNumber.Next(1, 2);
-                      passenger.DateOfBirth = (age.Item1 < DateTime.MinValue) ? DateTime.Today.AddMonths(-4) :age.Item1;
+                      passenger.StringDateOfBirth = 
+                      (age.Item1 < DateTime.MinValue) ? String.Format("{0:MM/dd/yyyy}", DateTime.Today.AddMonths(-4).Date) : String.Format("{0:MM/dd/yyyy}",age.Item1.Date);
                       passenger.Age = (DateTime.Today.Year - passenger.DateOfBirth.Year);
                       passenger.Mode = (TravelMode)(new Random(1)).Next(1, 3);
-                      passenger.TravelDate = (travelDate < DateTime.MinValue) ? DateTime.Today.AddDays(-30) : travelDate;
+                      passenger.StringTravelDate = 
+                      (travelDate < DateTime.MinValue) ? String.Format("{0:MM/dd/yyyy}", DateTime.Today.AddDays(-30)) : String.Format("{0:MM/dd/yyyy}", travelDate);
                       passenger.Origin = GetRandomPlaces().Item1; 
                       passenger.Destination = desti;
                       Console.WriteLine(passenger.DateOfBirth + "--" + passenger.Origin + "--" + passenger.Destination + "--"+passenger.Age + "--"+passenger.TravelDate);
@@ -59,7 +61,7 @@ namespace NewtonSoft
             DateTime start = new DateTime(fromYear, 1, 1);
             int range = (DateTime.Today - start).Days;
             DateTime randomDate = start.AddDays((new Random()).Next(range));
-            return new Tuple<DateTime, int>(randomDate, (range/365));
+            return new Tuple<DateTime, int>(randomDate, DateTime.Today.Year - randomDate.Year);
         }
 
         public static void CreateCSV<T>(List<T> list, string filePath)
@@ -101,6 +103,8 @@ namespace NewtonSoft
 
     public class PassengerInfo
     {
+        public string StringDateOfBirth { get; set; }
+        public string StringTravelDate { get; set; }
         public DateTime DateOfBirth { get; set; } = DateTime.Today.AddYears(-30);
         public string Origin { get; set; } = "Ahmedabad";
         public string Destination { get; set; } = "Mumbai";
