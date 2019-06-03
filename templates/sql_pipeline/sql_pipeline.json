@@ -1,0 +1,270 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory Name"
+		},
+		"AzureSqlDatabase1": {
+			"type": "string"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/sql_pipeline')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "ETL_Raw_Data",
+						"type": "ExecuteDataFlow",
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "ETL_TravelData_sql",
+								"type": "DataFlowReference"
+							},
+							"integrationRuntime": {
+								"referenceName": "highMemoryRuntime",
+								"type": "IntegrationRuntimeReference"
+							}
+						}
+					},
+					{
+						"name": "RefeshAggregate",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "ETL_Raw_Data",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"typeProperties": {
+							"storedProcedureName": "[[dbo].[RefreshAggregate]"
+						},
+						"linkedServiceName": {
+							"referenceName": "[parameters('AzureSqlDatabase1')]",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "UpdateImprotedRows",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "RefeshAggregate",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"typeProperties": {
+							"storedProcedureName": "[[dbo].[UpdateIsImportedInRawTable]"
+						},
+						"linkedServiceName": {
+							"referenceName": "[parameters('AzureSqlDatabase1')]",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "WebHook1",
+						"type": "WebHook",
+						"typeProperties": {
+							"url": "https://migrationpopulationforecast.scm.azurewebsites.net/api/triggeredwebjobs/DeltaCalculator/run",
+							"method": "POST",
+							"timeout": "00:10:00",
+							"authentication": {
+								"type": "Basic",
+								"username": "$MigrationPopulationForecast",
+								"password": {
+									"type": "SecureString",
+									"value": "**********"
+								}
+							}
+						}
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/ETL_TravelData_sql')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ETL_TravelData_sql')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "source_dummy_data_sql",
+								"type": "DatasetReference"
+							},
+							"name": "sourcesql",
+							"script": "source(output(\n\t\tOrigin as string,\n\t\tDestination as string,\n\t\tTravelDate as string,\n\t\tDateOfBirth as string,\n\t\tMode as integer,\n\t\tGender as boolean\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tbatchSize: 1000,\n\tquery: 'SELECT Origin,Destination,\\nTravelDate,\\nDateOfBirth,\\nMode,\\nGender \\nFROM [dbo].[TravelRawData]\\nWHERE IsImported = 0',\n\tformat: 'query') ~> sourcesql"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "destination_rawdata_table",
+								"type": "DatasetReference"
+							},
+							"name": "PassengerInfo2",
+							"script": "sqlFinalColumns sink(input(\n\t\tAge as integer,\n\t\tGender as boolean,\n\t\tOrign as string,\n\t\tDestination as string,\n\t\tMode as string,\n\t\tTravelDate as timestamp,\n\t\tTravelYear as integer,\n\t\tTravelMonth as integer,\n\t\tTravelDay as integer\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'table',\n\tbatchSize:1000,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tmapColumn(\n\t\tAge = sqlDerivedAge,\n\t\tGender,\n\t\tOrign = Origin,\n\t\tDestination,\n\t\tTravelDate = sqlDerivedTravelDate,\n\t\tTravelYear = sqlDerivedYear,\n\t\tTravelMonth = sqlDerivedMonth,\n\t\tTravelDay = sqlDerivedDay\n\t)) ~> PassengerInfo2"
+						}
+					],
+					"transformations": [
+						{
+							"name": "sqlDerivedColumns",
+							"script": "sourcesql derive(sqlDerivedAge = year(currentDate())- year(toDate(DateOfBirth,'MM/dd/yyyy')),\n\t\tsqlDerivedYear = year(toDate(TravelDate,'MM/dd/yyyy')),\n\t\tsqlDerivedMonth = month(toDate(TravelDate,'MM/dd/yyyy')),\n\t\tsqlDerivedDay = dayOfMonth(toDate(TravelDate,'MM/dd/yyyy')),\n\t\tsqlDerivedTravelDate = toDate(TravelDate,'MM/dd/yyyy')) ~> sqlDerivedColumns"
+						},
+						{
+							"name": "sqlFinalColumns",
+							"script": "sqlDerivedColumns select(mapColumn(\n\t\tOrigin,\n\t\tDestination,\n\t\tTravelDate,\n\t\tDateOfBirth,\n\t\tMode,\n\t\tGender,\n\t\tsqlDerivedAge,\n\t\tsqlDerivedYear,\n\t\tsqlDerivedMonth,\n\t\tsqlDerivedDay,\n\t\tsqlDerivedTravelDate\n\t))~> sqlFinalColumns"
+						}
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/source_dummy_data_sql')]",
+				"[concat(variables('factoryId'), '/datasets/destination_rawdata_table')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/source_dummy_data_sql')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('AzureSqlDatabase1')]",
+					"type": "LinkedServiceReference"
+				},
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "TravelId",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "Origin",
+						"type": "varchar"
+					},
+					{
+						"name": "Destination",
+						"type": "varchar"
+					},
+					{
+						"name": "TravelDate",
+						"type": "varchar"
+					},
+					{
+						"name": "DateOfBirth",
+						"type": "varchar"
+					},
+					{
+						"name": "Mode",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "Gender",
+						"type": "bit"
+					}
+				],
+				"typeProperties": {
+					"tableName": "[[dbo].[TravelRawData]"
+				}
+			}
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/destination_rawdata_table')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('AzureSqlDatabase1')]",
+					"type": "LinkedServiceReference"
+				},
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Age",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "Gender",
+						"type": "bit"
+					},
+					{
+						"name": "Orign",
+						"type": "varchar"
+					},
+					{
+						"name": "Destination",
+						"type": "varchar"
+					},
+					{
+						"name": "Mode",
+						"type": "varchar"
+					},
+					{
+						"name": "TravelDate",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "TravelYear",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "TravelMonth",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "TravelDay",
+						"type": "int",
+						"precision": 10
+					}
+				],
+				"typeProperties": {
+					"tableName": "[[dbo].[PassengerInfo_New]"
+				}
+			}
+		}
+	]
+}
